@@ -1,5 +1,7 @@
 library(tidyverse)
 
+setwd("~/BA888Spring")
+
 sellers <- read_csv("olist_sellers_dataset.csv")
 items <- read_csv("olist_order_items_dataset.csv")
 cd <- read_csv("olist_closed_deals_dataset.csv")
@@ -11,4 +13,3 @@ combined <- merge(mf, BR, by="seller_id")
 
 final <- combined %>% 
   select(-has_company,-has_gtin,-average_stock,-declared_product_catalog_size)
-
