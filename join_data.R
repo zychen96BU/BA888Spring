@@ -16,3 +16,5 @@ final <- combined %>%
   select(-has_company,-has_gtin,-average_stock,-declared_product_catalog_size)
 
 View(final)
+
+nrow(final)
