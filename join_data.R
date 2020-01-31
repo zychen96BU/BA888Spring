@@ -18,4 +18,8 @@ final <- combined %>%
 translated_review_clean <- trsanlatedReview %>% 
   select(order_id,review_score,review_comments)
 
+<<<<<<< HEAD
 final_withreview <- merge(final,translated_review_clean, by="order_id")
+=======
+final_withreview <- left_join(final,translated_review_clean, by="order_id")
+>>>>>>> fd5bc8e36adb654168eb754b4c69f3b2d2881586
