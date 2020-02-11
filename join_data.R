@@ -15,6 +15,13 @@ combined <- merge(mf, BR, by="seller_id")
 final <- combined %>% 
   select(-has_company,-has_gtin,-average_stock,-declared_product_catalog_size)
 
+<<<<<<< HEAD
 View(final)
 
 nrow(final)
+=======
+translated_review_clean <- trsanlatedReview %>% 
+  select(order_id,review_score,review_comments)
+
+final_withreview <- left_join(final,translated_review_clean, by="order_id")
+>>>>>>> 84f26fb925677df5434fa53e21bd44c87f5e347a
