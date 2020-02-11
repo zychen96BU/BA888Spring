@@ -36,5 +36,12 @@ transaction$deliverd_difftime <- as.numeric(difftime(transaction$order_delivered
 
 transaction <- na.omit(transaction)
 
-combined <- merge(mf, transaction, by="seller_id")
+final <- merge(mf, transaction, by="seller_id")
+translated_review_clean <- order_review_translated %>% 
+  select(order_id,review_score,review_comments)
+
+final_withreview <- merge(final,translated_review_clean, by="order_id")
+
+final_withreview <- left_join(final,translated_review_clean, by="order_id")
+View(final_withreview)
 
