@@ -74,7 +74,8 @@ transaction <- transaction2 %>%
 transaction$order_estimated_delivery_date <- as.POSIXct(transaction$order_estimated_delivery_date, format="%Y-%m-%d %H:%M:%S")
 transaction$order_approved_at <- as.POSIXct(transaction$order_approved_at, format="%Y-%m-%d %H:%M:%S")
 transaction$order_delivered_customer_date <- as.POSIXct(transaction$order_delivered_customer_date, format="%Y-%m-%d %H:%M:%S")
-transaction$deliverd_difftime <- as.numeric(difftime(transaction$order_delivered_customer_date ,transaction$order_estimated_delivery_date)/3600/24)
+## using ceiling() to get the smallest intergers not less than the corresponding elements of x
+transaction$deliverd_difftime <- ceiling(as.numeric(difftime(transaction$order_delivered_customer_date ,transaction$order_estimated_delivery_date), units = "days"))
 
 transaction <- na.omit(transaction)
 
@@ -111,7 +112,7 @@ Note that the `echo = FALSE` parameter was added to the code chunk to prevent pr
 ```{r}
 ## Text Analysis
 
-reviews <- read_csv("brazilian-ecommerce (1)/olist_order_reviews_dataset.csv")
+reviews <- read_csv("Data/olist_order_reviews_dataset.csv")
 
 order_reviews = na.omit(reviews)
 order_reviews$review_comment_message = tolower(order_reviews$review_comment_message)
