@@ -67,15 +67,26 @@ transaction2 <- na.omit(left_join(transaction1,sellers))
 
 transaction <- transaction2 %>%
   mutate(major_state = if_else(customer_state == c('SP','RJ','MG','BA','PA','PE'), 1, 0))
+transaction_review<-left_join(transaction, order_reviews, by= c("order_id"="order_id"))
+
 ```
 
 ## Clean transaction date
 ```{r}
 transaction$order_estimated_delivery_date <- as.POSIXct(transaction$order_estimated_delivery_date, format="%Y-%m-%d %H:%M:%S")
 transaction$order_approved_at <- as.POSIXct(transaction$order_approved_at, format="%Y-%m-%d %H:%M:%S")
+
+
+
+
 transaction$order_delivered_customer_date <- as.POSIXct(transaction$order_delivered_customer_date, format="%Y-%m-%d %H:%M:%S")
 ## using ceiling() to get the smallest intergers not less than the corresponding elements of x
 transaction$deliverd_difftime <- ceiling(as.numeric(difftime(transaction$order_delivered_customer_date ,transaction$order_estimated_delivery_date), units = "days"))
+
+
+
+transaction$delivered_days <- as.numeric(difftime(transaction$order_delivered_customer_date ,transaction$order_approved_at), units = "days")
+
 
 transaction <- na.omit(transaction)
 
@@ -92,6 +103,10 @@ final_withreview <- merge(final,translated_review_clean, by="order_id")
 final_withreview <- left_join(final,translated_review_clean, by="order_id")
 write_csv(final_withreview,"final_dataset.csv")
 
+useful_var<-c("price","deliverd_difftime","delivered_days",
+              "payment_value","freight_value","product_category_name",
+              "product_name_lenght","product_description_lenght","product_photos_qty",
+              )
 
 colnames(final_withreview)
 ```
