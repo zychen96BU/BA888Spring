@@ -105,3 +105,48 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Text Analysis
+
+```{r}
+## Text Analysis
+
+reviews <- read_csv("brazilian-ecommerce (1)/olist_order_reviews_dataset.csv")
+
+order_reviews = na.omit(reviews)
+order_reviews$review_comment_message = tolower(order_reviews$review_comment_message)
+order_reviews1 <- order_reviews %>%
+  unnest_tokens(token, review_comment_message) 
+
+stopwords::stopwords_getsources() 
+stopwords::stopwords_getlanguages("misc") 
+stopwords::stopwords_getlanguages("snowball") 
+stopwords::stopwords_getlanguages("stopwords-iso") 
+stopwords::stopwords_getlanguages("smart") 
+stopwords::stopwords("portuguese")->porStopwords
+porStopwords<-as.data.frame(porStopwords)
+names(porStopwords)[1]<-"word"
+
+order_reviews2 <- order_reviews1 %>%
+  anti_join(porStopwords, by = c('token' = 'word')) 
+order_reviews_sum <- order_reviews2 %>%
+  group_by(token) %>%
+  count(sort = T)
+
+## Word Cloud Plot
+wordcloud(words = order_reviews_sum$token,
+          freq = order_reviews_sum$n, min.freq = 10, max.words = 50)
+
+## LDA model
+order_reviews_corpus <- corpus(order_reviews$review_comment_message) 
+order_reviews_corpus1 <- tm_map(order_reviews_corpus, removeWords, porStopwords)
+
+summary(order_reviews_corpus, n = 20, showmeta = T) 
+order_reviews_dfm <- dfm(order_reviews_corpus,remove_punct= T,remove = c(stopwords::stopwords("portuguese"),"é"), remove_numbers= T, remove_symbols= T) %>%
+  dfm_trim(min_termfreq = 2, max_docfreq = .5,
+           docfreq_type = "prop") 
+order_reviews_dtm <- convert(order_reviews_dfm, 'topicmodels')
+order_reviews_lda <- LDA(order_reviews_dtm, k = 2, control = list(seed = 729))
+terms(order_reviews_lda, 10) ->topicsPro
+```
+
