@@ -165,7 +165,11 @@ useful_var<-c("price","deliverd_difftime","delivered_days",
               "product_name_lenght","product_description_lenght","product_photos_qty",
               "review_score")
 final_withreview %>% 
-  select(useful_var)->prediction_dataset
+  select(declared_monthly_revenue,price,freight_value,product_name_lenght:payment_sequential,payment_installments:mean_long,major_state:review_score)->prediction_dataset
+
+
+# final_withreview %>% 
+#   select(useful_var)->prediction_dataset
 
 
 
@@ -177,7 +181,7 @@ ef_train <- prediction_dataset %>% filter(train == 1)
 
 
 # data preparation
-f1<-as.formula(paste(names(prediction_dataset)[10], paste(names(prediction_dataset)[-10], collapse=" + "), sep=" ~ "))
+f1<-as.formula(paste(names(prediction_dataset)[19], paste(names(prediction_dataset)[1:18], collapse=" + "), sep=" ~ "))
 x_train <- model.matrix(f1, ef_train)[, -1]
 y_train <- ef_train$review_score
 x_test <- model.matrix(f1, ef_test)[, -1]
@@ -190,7 +194,7 @@ y_test <- ef_test$review_score
 ### forward
 ```{r}
 xnames <- colnames(ef_train)
-# xnames <- xnames[!xnames %in% c("train", "Econ","year","ISO_code","countries","rank")]
+xnames <- xnames[!xnames %in% c("train", "review_score")]
 fit_fw <- lm(review_score ~ 1, data = ef_train)
 yhat_train <- predict(fit_fw, ef_train)
 yhat_test <- predict(fit_fw, ef_test)
