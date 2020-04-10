@@ -48,6 +48,7 @@ sellers <- read.csv('Data/olist_sellers_dataset.csv')
 
 # load marketing funnel dataset
 ```{r}
+library(tidyverse)
 cd <- read.csv("Data/olist_closed_deals_dataset.csv")
 mql <- read.csv("Data/olist_marketing_qualified_leads_dataset.csv")
 marketing_funnel<- merge(cd, mql, by="mql_id")
@@ -105,22 +106,12 @@ write_csv(final_withreview,"final_dataset.csv")
 
 useful_var<-c("price","deliverd_difftime","delivered_days",
               "payment_value","freight_value","product_category_name",
-              "product_name_lenght","product_description_lenght","product_photos_qty",
+              "product_name_lenght","product_description_lenght","product_photos_qty"
               )
 
-colnames(final_withreview)
+#colnames(final_withreview)
 ```
 
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ## Text Analysis
 
@@ -128,7 +119,7 @@ Note that the `echo = FALSE` parameter was added to the code chunk to prevent pr
 ## Text Analysis
 
 reviews <- read_csv("Data/olist_order_reviews_dataset.csv")
-
+library(tokenizers)
 order_reviews = na.omit(reviews)
 order_reviews$review_comment_message = tolower(order_reviews$review_comment_message)
 order_reviews1 <- order_reviews %>%
@@ -155,7 +146,7 @@ wordcloud(words = order_reviews_sum$token,
 
 ## LDA model
 order_reviews_corpus <- corpus(order_reviews$review_comment_message) 
-order_reviews_corpus1 <- tm_map(order_reviews_corpus, removeWords, porStopwords)
+#order_reviews_corpus1 <- tm_map(order_reviews_corpus, removeWords, porStopwords)
 
 summary(order_reviews_corpus, n = 20, showmeta = T) 
 order_reviews_dfm <- dfm(order_reviews_corpus,remove_punct= T,remove = c(stopwords::stopwords("portuguese"),"é"), remove_numbers= T, remove_symbols= T) %>%
@@ -166,15 +157,45 @@ order_reviews_lda <- LDA(order_reviews_dtm, k = 2, control = list(seed = 729))
 terms(order_reviews_lda, 10) ->topicsPro
 ```
 
+## set formula
+```{r}
+
+useful_var<-c("price","deliverd_difftime","delivered_days",
+              "payment_value","freight_value","product_category_name",
+              "product_name_lenght","product_description_lenght","product_photos_qty",
+              "review_score")
+final_withreview %>% 
+  select(useful_var)->prediction_dataset
+
+
+
+set.seed(1234)
+prediction_dataset$train <- sample(c(0,1), nrow(prediction_dataset), replace = T, prob = c(.3, .7))
+ef_test <- prediction_dataset %>% filter(train == 0)
+ef_train <- prediction_dataset %>% filter(train == 1)
+
+
+
+# data preparation
+f1<-as.formula(paste(names(prediction_dataset)[10], paste(names(prediction_dataset)[-10], collapse=" + "), sep=" ~ "))
+x_train <- model.matrix(f1, ef_train)[, -1]
+y_train <- ef_train$review_score
+x_test <- model.matrix(f1, ef_test)[, -1]
+y_test <- ef_test$review_score
+```
+
+
+
+
 ### forward
 ```{r}
 xnames <- colnames(ef_train)
-xnames <- xnames[!xnames %in% c("train", "Economic_Freedom","year","ISO_code","countries","rank")]
-fit_fw <- lm(Economic_Freedom ~ 1, data = ef_train)
+# xnames <- xnames[!xnames %in% c("train", "Econ","year","ISO_code","countries","rank")]
+fit_fw <- lm(review_score ~ 1, data = ef_train)
 yhat_train <- predict(fit_fw, ef_train)
 yhat_test <- predict(fit_fw, ef_test)
-mse_train <- mean((ef_train$Economic_Freedom - yhat_train) ^ 2)
-mse_test <- mean((ef_test$Economic_Freedom - yhat_test) ^ 2)
+mse_train <- mean((ef_train$review_score - yhat_train) ^ 2)
+mse_test <- mean((ef_test$review_score - yhat_test) ^ 2)
 xname <- "intercept"
 log_fw <-
   tibble(
@@ -195,10 +216,10 @@ while (length(xnames) > 0) {
     fit_fw_tmp <- update(fit_fw, as.formula(paste0(". ~ . + ", xname)))
     # compute MSE train
     yhat_train_tmp <- predict(fit_fw_tmp, ef_train)
-    mse_train_tmp <- mean((ef_train$Economic_Freedom - yhat_train_tmp) ^ 2)
+    mse_train_tmp <- mean((ef_train$review_score - yhat_train_tmp) ^ 2)
     # compute MSE test
     yhat_test_tmp <- predict(fit_fw_tmp, ef_test)
-    mse_test_tmp <- mean((ef_test$Economic_Freedom - yhat_test_tmp) ^ 2)
+    mse_test_tmp <- mean((ef_test$review_score - yhat_test_tmp) ^ 2)
     # if this is the first predictor to be examined,
     # or if this predictors yields a lower MSE that the current
     # best, then store this predictor as the current best predictor
