@@ -1,0 +1,340 @@
+---
+title: "BA810 Team 3 - World Economic Freedom"
+author: "Huiying Ba, He Chen, Zhaoying Chen, Chengting Lee, Yiying Wang, Qifan Yang"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+For this project, we applied multiple model methods on our dataset "Economic Freedom of the World", in our dataset it includes worlds premier measurement ofstructure and security of property rights, access to sound money, freedom to tradeinternationally, and regulation of credit, labour and business economic freedom, ranking countries.
+
+## Set up
+```{r,warning=FALSE, results='hide'}
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+library(scales)
+library(randomForest)
+library(gbm)
+library(glmnet)
+library(rpart)
+library(rpart.plot)
+theme_set(theme_bw())
+```
+
+## Load and clean economic freedom dataset
+```{r,warning=FALSE}
+# load datasets
+ef <- read.csv("economic_freedom.csv")
+
+# Remove NA
+cv<-colnames(ef)
+cv1<-cv[c(4:36)]
+for (i in 1:length(cv1)){
+  Total_median<-median(purrr::flatten_dbl(ef[cv1[i]]), na.rm = TRUE)
+  ef[cv1[i]][is.na(ef[cv1[i]])] <- Total_median
+}
+
+# selected columns
+ef<-ef[,c(4, 7:10, 12:21, 23:26, 28:31, 33:35)]
+
+# train ans test datasets
+set.seed(1234)
+ef$train <- sample(c(0,1), nrow(ef), replace = T, prob = c(.3, .7))
+ef_test <- ef %>% filter(train == 0)
+ef_train <- ef %>% filter(train == 1)
+
+# data preparation
+f1 <- as.formula(Economic_Freedom ~ government_consumption + transfers + 
+         gov_enterprises + top_marg_tax_rate + judicial_independence +
+           impartial_courts + protection_property_rights +
+           military_interference + integrity_legal_system +
+           legal_enforcement_contracts + restrictions_sale_real_property +
+           reliability_police + business_costs_crime + gender_adjustment +
+           money_growth + std_inflation + inflation +
+           freedom_own_foreign_currency + tariffs + regulatory_trade_barriers +
+           black_market + control_movement_capital_ppl + credit_market_reg +
+           labor_market_reg + business_reg)
+x_train <- model.matrix(f1, ef_train)[, -1]
+y_train <- ef_train$Economic_Freedom
+x_test <- model.matrix(f1, ef_test)[, -1]
+y_test <- ef_test$Economic_Freedom
+```
+
+## Model #1: Linear Regression
+For the linear regression model, we found that the coefficient for gender_adjustment is 0.45, which is the biggest coefficient. For other coefficients, they are all less than 0.1. We computed that the train MSE is 0.087 and the test MSE is 0.079. The two MSE are so close and the test MSE is even smaller than train MSE. Compared with other models, the test MSE of linear regression is closed to most other models like backward selection, ridge regression, lasso regression. 
+```{r,warning=FALSE}
+# compute MSEs
+fit_lm <- lm(f1, ef_train)
+# MSE Train
+yhat_train_lm <- predict(fit_lm)
+mse_train_lm <- mean((y_train - yhat_train_lm)^2)
+paste("Linear Regression Train MSE", mse_train_lm)
+# MSE Test
+yhat_test_lm <- predict(fit_lm, ef_test) 
+mse_test_lm <- mean((y_test - yhat_test_lm)^2)
+paste("Linear Regression Test MSE", mse_test_lm)
+coef(fit_lm)
+```
+
+## Model #2: Forward Selection
+In the beginning, when taking only intercept into consideration, train MSE is 1.019 and test is 1.09. After adding 25 predictors one by one, train mse reduces to 0.087 and test reduces to 0.079. These are smallest MSE. When adding control_movement_capital_ppl, mse decrease sharply, train mse decreases to 0.495 and test decreases to 0.542. At each step the variable that gives the greatest additional improvement to the fit is added to the model.
+```{r,warning=FALSE}
+xnames <- colnames(ef_train)
+xnames <- xnames[!xnames %in% c("train", "Economic_Freedom","year","ISO_code","countries","rank")]
+fit_fw <- lm(Economic_Freedom ~ 1, data = ef_train)
+yhat_train <- predict(fit_fw, ef_train)
+yhat_test <- predict(fit_fw, ef_test)
+mse_train <- mean((ef_train$Economic_Freedom - yhat_train) ^ 2)
+mse_test <- mean((ef_test$Economic_Freedom - yhat_test) ^ 2)
+xname <- "intercept"
+log_fw <-
+  tibble(
+    xname = xname,
+    model = paste0(deparse(fit_fw$call), collapse = ""),
+    mse_train = mse_train,
+    mse_test = mse_test
+  )
+###
+while (length(xnames) > 0) {
+  best_mse_train <- NA
+  best_mse_test <- NA
+  best_fit_fw <- NA
+  best_xname <- NA
+  # select the next best predictor
+  for (xname in xnames) {
+    # take a moment to examine and understand the following line
+    fit_fw_tmp <- update(fit_fw, as.formula(paste0(". ~ . + ", xname)))
+    # compute MSE train
+    yhat_train_tmp <- predict(fit_fw_tmp, ef_train)
+    mse_train_tmp <- mean((ef_train$Economic_Freedom - yhat_train_tmp) ^ 2)
+    # compute MSE test
+    yhat_test_tmp <- predict(fit_fw_tmp, ef_test)
+    mse_test_tmp <- mean((ef_test$Economic_Freedom - yhat_test_tmp) ^ 2)
+    # if this is the first predictor to be examined,
+    # or if this predictors yields a lower MSE that the current
+    # best, then store this predictor as the current best predictor
+    if (is.na(best_mse_test) | mse_test_tmp < best_mse_test) {
+      best_xname <- xname
+      best_fit_fw <- fit_fw_tmp
+      best_mse_train <- mse_train_tmp
+      best_mse_test <- mse_test_tmp
+    }
+  }
+  log_fw <-
+    log_fw %>% add_row(
+      xname = best_xname,
+      model = paste0(deparse(best_fit_fw$call), collapse = ""),
+      mse_train = best_mse_train,
+      mse_test = best_mse_test
+    )
+  # adopt the best model for the next iteration
+  fit_fw <- best_fit_fw
+  
+  # remove the current best predictor from the list of predictors
+  xnames <- xnames[xnames!=best_xname]
+}
+
+ggplot(log_fw, aes(seq_along(xname), mse_test)) +
+  geom_point() +
+  geom_line() +
+  geom_point(aes(y=mse_train), color="blue") +
+  geom_line(aes(y=mse_train), color="blue") +
+  scale_x_continuous("Variables", labels = log_fw$xname, breaks = seq_along(log_fw$xname)) +
+  scale_y_continuous("MSE test") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(log_fw)
+```
+
+## Model #3: Backward Selection
+In the beginning, when taking all variables into consideration the train MSE is 0.087 and test MSE is 0.079. After eliminating variables one by one until only one variables left, government_consumption, the train MSE is 1.019 and test MSE is 1.09. From credit_market_reg to black_market, train MSE raised from 0.269 to 0.343, test MSE  raised from 0.260 to 0.333. From std_inflation to money_growth, train MSE raised from 0.412 to 0.489, test MSE raised from 0.400 to 0.492.
+```{r,warning=FALSE}
+xnames <- colnames(ef_train)
+xnames <- xnames[!xnames %in% c("train", "Economic_Freedom","year","ISO_code","countries","rank")]
+fit_bk <- lm(Economic_Freedom ~ ., data = ef_train)
+yhat_train_bk <- predict(fit_bk, ef_train)
+yhat_test_bk <- predict(fit_bk, ef_test)
+mse_train_bk <- mean((ef_train$Economic_Freedom - yhat_train_bk) ^ 2)
+mse_test_bk <- mean((ef_test$Economic_Freedom - yhat_test_bk) ^ 2)
+xname <- "intercept"
+log_bk <-
+  tibble(
+    xname = xname,
+    model = paste0(deparse(fit_bk$call), collapse = ""),
+    mse_train_bk = mse_train_bk,
+    mse_test_bk = mse_test_bk
+  )
+###
+while (length(xnames) > 0) {
+  best_mse_train_bk <- NA
+  best_mse_test_bk <- NA
+  best_fit_bk <- NA
+  best_xname_bk <- NA
+  # select the next best predictor
+  for (xname in xnames) {
+    # take a moment to examine and understand the following line
+    fit_bk_tmp <- update(fit_bk, as.formula(paste0(". ~ . - ", xname)))
+    # compute MSE train
+    yhat_train_tmp_bk <- predict(fit_bk_tmp, ef_train)
+    mse_train_tmp_bk <- mean((ef_train$Economic_Freedom - yhat_train_tmp_bk) ^ 2)
+    # compute MSE test
+    yhat_test_tmp_bk <- predict(fit_bk_tmp, ef_test)
+    mse_test_tmp_bk <- mean((ef_test$Economic_Freedom - yhat_test_tmp_bk) ^ 2)
+    # if this is the first predictor to be examined,
+    # or if this predictors yields a lower MSE that the current
+    # best, then store this predictor as the current best predictor
+    if (is.na(best_mse_test_bk) | mse_test_tmp_bk > best_mse_test_bk) {
+      best_xname_bk <- xname
+      best_fit_bk <- fit_bk_tmp
+      best_mse_train_bk <- mse_train_tmp_bk
+      best_mse_test_bk <- mse_test_tmp_bk
+    }
+  }
+  log_bk <-
+    log_bk %>% add_row(
+      xname = best_xname_bk,
+      model = paste0(deparse(best_fit_bk$call), collapse = ""),
+      mse_train_bk = best_mse_train_bk,
+      mse_test_bk = best_mse_test_bk
+    )
+  # adopt the best model for the next iteration
+  fit_bk <- best_fit_bk
+  
+  # remove the current best predictor from the list of predictors
+  xnames <- xnames[xnames!=best_xname_bk]
+}
+
+ggplot(log_bk, aes(seq_along(xname), mse_test_bk)) +
+  geom_point() +
+  geom_line() +
+  geom_point(aes(y=mse_train_bk), color="blue") +
+  geom_line(aes(y=mse_train_bk), color="blue") +
+  scale_x_continuous("Variables", labels = log_bk$xname, breaks = seq_along(log_bk$xname)) +
+  scale_y_continuous("MSE test") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(log_bk)
+```
+
+## Model #4: Ridge Regression
+The Train MSE of Ridge is 0.0879899894085094,and test MSE is 0.0795354198496345.These two numbers are pretty close and even the test MSE is smaller than Train MSE. This means this model is very fit to the data. We also calculated the coefficient between predictors and response. We found that only intercept and judicial_independence has negative coefficient, all other predictors coefficient are positive. However, since the absolute value of Intercept coefficient, is larger that other variables, it is very hard to explain how these variables effect on response value. Thus we used Lasso Regression to eliminate the variables that coefficient is too small to effect on response Y.
+```{r,warning=FALSE}
+est_r <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
+#est_r <- glmnet(x_train, y_train, alpha = 0, nlambda = 100)
+y_train_hat_r <- predict(est_r,x_train,s = est_r$lambda.min)
+mse_train_r <- mean((y_train - y_train_hat_r)^2)
+#y_train_hat
+
+y_test_hat_r <- predict(est_r, x_test,s = est_r$lambda.min)
+mse_test_r <- mean((y_test - y_test_hat_r)^2)
+lambda_min_mse_train_r <- mse_train_r[which.min(mse_train_r)]
+lambda_min_mse_test_r <- mse_test_r[which.min(mse_test_r)]
+paste("Ridge Regression Train MSE",lambda_min_mse_train_r)
+paste("Ridge Regression Test MSE",lambda_min_mse_test_r)
+
+coef(est_r,lambda_min_mse_test_r)
+```
+
+
+## Model #5: Lasso Regression
+The Train MSE of Ridge is 0.0871182804528582,and test MSE is 0.0791935605686631.These two numbers are pretty close and even the test MSE is smaller than Train MSE. In addition, both the Train MSE and Test MSE are smaller that what we got from Ridge Regression. This means this model is very fit to the data. In the coefficient result, we can see that there are 7 variables has no effect on response Y and the rest variables has positive coefficient with respontse Y. This means, with the increase of the variable, the response Y also increase. This model is more interpretable than Ridge Regression. 
+```{r,warning=FALSE}
+est_l <- cv.glmnet(x_train, y_train, alpha = 1, nfolds = 10)
+#est_r <- glmnet(x_train, y_train, alpha = 0, nlambda = 100)
+y_train_hat_l <- predict(est_l,x_train,s = est_l$lambda.min)
+mse_train_l <- mean((y_train - y_train_hat_l)^2)
+#y_train_hat
+
+y_test_hat_l <- predict(est_l, x_test,s = est_l$lambda.min)
+mse_test_l <- mean((y_test - y_test_hat_l)^2)
+lambda_min_mse_train_l <- mse_train_l[which.min(mse_train_l)]
+lambda_min_mse_test_l <- mse_test_l[which.min(mse_test_l)]
+paste("Ridge Regression Train MSE",lambda_min_mse_train_l)
+paste("Ridge Regression Test MSE",lambda_min_mse_test_l)
+
+coef(est_l,lambda_min_mse_test_l)
+```
+
+
+## Model #6: Regression Tree
+The simple tree model is a kind of hierarchical model. Firstly, all observations that are fewer than control_movement_capital_ppls go to the left branch, all other observations proceed to the right branch. Next, the left branch is further partitioned by credit_market_reg and right branch is gone by tariffs and then by parity of reasoning.Train MSE: 0.2138 and Test MSE: 0.4563. It’s prone to overfitting. Random forest is simply a collection of decision trees whose results are aggregated into one final result. As a result, the simple regression tree is less accurate.
+```{r,warning=FALSE,results="hide"}
+ef_test_rt <- ef_test %>%
+  filter(sample(c(0,1),nrow(ef_test),replace=TRUE,prob=c(0.95,0.05))==1)
+ef_train_rt <- ef_train %>%
+  filter(sample(c(0,1),nrow(ef_train),replace=TRUE,prob=c(0.95,0.05))==1)
+fit.tree <- rpart(f1,
+                  ef_train_rt,
+                  control = rpart.control(cp = 0.001))
+par(xpd = TRUE)
+plot(fit.tree, compress=TRUE)
+text(fit.tree, use.n=TRUE)
+```
+
+```{r,warning=FALSE}
+rpart.plot(fit.tree, type = 1)
+yhat.train.tree <- predict(fit.tree, ef_train_rt)
+mse.train.tree <- mean((ef_train_rt$Economic_Freedom - yhat.train.tree)^2)
+yhat.test.tree <- predict(fit.tree, ef_test_rt)
+mse.test.tree <- mean((ef_test_rt$ Economic_Freedom- yhat.test.tree)^2)
+
+paste("Regression Tree Train MSE",mse.train.tree)
+paste("Regression Tree Test MSE",mse.test.tree)
+
+#bias and variance trade-off with trees
+x0 <- ef_train_rt[1,]
+ef_train_1 <- ef_train_rt[-1,]
+yhat_small_tree <- c()
+for (i in seq(3726)) {
+  fit_tree <- rpart(f1,
+                    ef_train_1 %>% sample_frac(size = .1),
+                    control = rpart.control(cp = 0.001))
+  yhat <- predict(fit_tree, x0)
+  yhat_small_tree <- c(yhat_small_tree, yhat)
+}
+yhat_big_tree <- c()
+for (i in seq(3726)) {
+  fit_tree <- rpart(f1,
+                    ef_train_1 %>% sample_frac(size = .1),
+                    control = rpart.control(cp = 0.0001))
+  yhat <- predict(fit_tree, x0)
+  yhat_big_tree <- c(yhat_big_tree, yhat)
+}
+errors <- data.frame(
+  "error"= (x0$Economic_Freedom - c(yhat_small_tree, yhat_big_tree)),
+  "flexibility"= c(rep("small", length(yhat_small_tree)), rep("big",length(yhat_big_tree))))
+ggplot(errors,aes(error)) +geom_density()+facet_grid(flexibility~.)
+```
+
+## Model #7: Random Forests
+We fit a random forest by f1 in train dataset and used varImpPlot function to find out which variables were important in the model. From the chart, controls of the movement of capital and people is the most important variable, credit market regulations follow, with freedom to own foreign currency bank accounts the third most important, and so on. After making some predictions, we computed the test MSE, which shows the smallest MSE value in all of the methods.
+```{r,warning=FALSE}
+fit_rf <- randomForest(f1, ef_train, ntree = 500, do.trace=F)
+yhat_rf_train <- predict(fit_rf, ef_train)
+mse_rf_train <- mean((yhat_rf_train - y_train) ^2)
+yhat_rf_test <- predict(fit_rf, ef_test)
+mse_rf_test <- mean((yhat_rf_test - y_test) ^2)
+
+varImpPlot(fit_rf)
+paste("Random Forest Train MSE",mse_rf_train)
+paste("Random Forest Test MSE",mse_rf_test)
+```
+
+## Model #8: Boosting Trees
+For boosting trees model, we used shrinkage 0.1 and we found that train MSE is 0.0814 and test MSE is 0.0965. They are bigger than most other models. It means this model is not the best model to predict the world economic freedom score. 
+```{r,warning=FALSE}
+fit_btree <- gbm(f1, data = ef_train, distribution = "gaussian",
+                 n.trees = 1000, interaction.depth = 2, shrinkage = 0.1)
+relative.influence(fit_btree)
+yhat_btree_train <- predict(fit_btree, ef_train, n.trees = 100)
+mse_btree_train <- mean((yhat_btree_train - y_train) ^ 2)
+yhat_btree_test <- predict(fit_btree, ef_test, n.trees = 100)
+mse_btree_test <- mean((yhat_btree_test - y_test) ^ 2)
+
+paste("Boosting Trees Train MSE",mse_btree_train)
+paste("Boosting Trees Test MSE",mse_btree_test)
+```
+
+## Conclusion
+We compared 8 machine learning models by comparing test MSE. For forward selection, simple trees, boosted trees, the test MSE is higher than other models. Especially forward selection, the test MSE is over 1.0. For some other models, the test MSE are lower and close to each other. Random forests is the model with smallest test MSE, which is 0.0773669. Thus, random forest is the best way with least error to predict world economic freedom score given its characteristics. 
