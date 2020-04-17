@@ -232,6 +232,7 @@ y_test <- ef_test$review_score
 
 ## randromForest
 ```{r}
+library(randomForest)
 fit_rf <- randomForest(f1, ef_train, ntree = 500, do.trace=F)
 yhat_rf_train <- predict(fit_rf, ef_train)
 mse_rf_train <- mean((yhat_rf_train - y_train) ^2)
