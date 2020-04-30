@@ -1,0 +1,69 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(maps)
+library(Imap)
+library(readr)
+```
+
+#load data
+```{r message=FALSE}
+cust <- read_csv("brazilian-ecommerce/olist_customers_dataset.csv")
+geo<-read_csv("brazilian-ecommerce/olist_geolocation_dataset.csv")
+orderitems <- read_csv("brazilian-ecommerce/olist_order_items_dataset.csv")
+payments <- read_csv("brazilian-ecommerce/olist_order_payments_dataset.csv")
+reviews <- read_csv("brazilian-ecommerce/olist_order_reviews_dataset.csv")
+orders <- read_csv("brazilian-ecommerce/olist_orders_dataset.csv")
+products <- read_csv("brazilian-ecommerce/olist_products_dataset.csv")
+sellers <- read_csv("brazilian-ecommerce/olist_sellers_dataset.csv")
+category <- read_csv("brazilian-ecommerce/product_category_name_translation.csv")
+mql <- read_csv("marketing-funnel-olist/olist_marketing_qualified_leads_dataset.csv")
+cd <- read_csv("marketing-funnel-olist/olist_closed_deals_dataset.csv")
+```
+
+# Merge Data 
+```{r}
+dat1<-merge(orderitems,sellers,by="seller_id")
+dat2<-merge(orders,cust,by="customer_id")
+dat3<-merge(dat2,dat1,by="order_id")
+dat4<-merge(dat3,products,by="product_id")
+dat5<-merge(dat4,payments,by="order_id")
+selllocation<-geo %>% group_by(geolocation_city) %>% summarise(selllat = max(geolocation_lat),selllng=max(geolocation_lng))
+custlocation<-geo %>% group_by(geolocation_city) %>% summarise(custlat = max(geolocation_lat),custlng=max(geolocation_lng))
+dat6<-merge(dat5,selllocation,by.x="seller_city",by.y="geolocation_city")
+dat7<-merge(dat6,custlocation,by.x="customer_city",by.y="geolocation_city")
+dat8<-merge(dat7,nametrans,by="product_category_name")
+eCommerce <- merge(dat8, reviews, by="order_id")
+
+mf <- merge(cd, mql, by="mql_id")
+
+eCommerce_with_mf<- merge(mf, eCommerce, by="seller_id")
+
+write_csv(eCommerce, "eCommerce.csv")
+write_csv(eCommerce_with_mf, "eCommerce_with_mf.csv")
+```
+
+# map
+```{r}
+Brazil<-map_data("world")%>%filter(region=="Brazil")
+
+ggplot() +
+  geom_polygon(data = Brazil, aes(x=long, y = lat, group = group), fill="black")+
+  geom_point(data= dat7,aes(x=selllng,y=selllat,color=seller_state),size=0.1)+
+  ggtitle("Seller Distribution")+
+  xlim(-75,-30)+
+  ylim(-40,10)
+
+ggplot() +
+  geom_polygon(data = Brazil, aes(x=long, y = lat, group = group), fill="black")+
+  geom_point(data= dat7,aes(x=custlng,y=custlat,color=customer_state),size=0.1)+
+  ggtitle("Customer Distribution")+
+  xlim(-75,-25)+
+  ylim(-40,10)
+
+```
