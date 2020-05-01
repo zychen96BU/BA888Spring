@@ -259,4 +259,135 @@ ggplot(log_fw, aes(seq_along(xname), mse_test)) +
 
 print(log_fw)
 ```
+## backward
+```{r}
+xnames <- colnames(ef_train)
+xnames <- xnames[!xnames %in% c("train","review_score")]
+fit_bk <- lm(review_score ~ ., data = ef_train)
+yhat_train_bk <- predict(fit_bk, ef_train)
+yhat_test_bk <- predict(fit_bk, ef_test)
+mse_train_bk <- mean((ef_train$review_score - yhat_train_bk) ^ 2)
+mse_test_bk <- mean((ef_test$review_score - yhat_test_bk) ^ 2)
+xname <- "intercept"
+log_bk <-
+  tibble(
+    xname = xname,
+    model = paste0(deparse(fit_bk$call), collapse = ""),
+    mse_train_bk = mse_train_bk,
+    mse_test_bk = mse_test_bk
+  )
+###
+while (length(xnames) > 0) {
+  best_mse_train_bk <- NA
+  best_mse_test_bk <- NA
+  best_fit_bk <- NA
+  best_xname_bk <- NA
+  # select the next best predictor
+  for (xname in xnames) {
+    # take a moment to examine and understand the following line
+    fit_bk_tmp <- update(fit_bk, as.formula(paste0(". ~ . - ", xname)))
+    # compute MSE train
+    yhat_train_tmp_bk <- predict(fit_bk_tmp, ef_train)
+    mse_train_tmp_bk <- mean((ef_train$review_score - yhat_train_tmp_bk) ^ 2)
+    # compute MSE test
+    yhat_test_tmp_bk <- predict(fit_bk_tmp, ef_test)
+    mse_test_tmp_bk <- mean((ef_test$review_score - yhat_test_tmp_bk) ^ 2)
+    # if this is the first predictor to be examined,
+    # or if this predictors yields a lower MSE that the current
+    # best, then store this predictor as the current best predictor
+    if (is.na(best_mse_test_bk) | mse_test_tmp_bk > best_mse_test_bk) {
+      best_xname_bk <- xname
+      best_fit_bk <- fit_bk_tmp
+      best_mse_train_bk <- mse_train_tmp_bk
+      best_mse_test_bk <- mse_test_tmp_bk
+    }
+  }
+  log_bk <-
+    log_bk %>% add_row(
+      xname = best_xname_bk,
+      model = paste0(deparse(best_fit_bk$call), collapse = ""),
+      mse_train_bk = best_mse_train_bk,
+      mse_test_bk = best_mse_test_bk
+    )
+  # adopt the best model for the next iteration
+  fit_bk <- best_fit_bk
+  
+  # remove the current best predictor from the list of predictors
+  xnames <- xnames[xnames!=best_xname_bk]
+}
 
+ggplot(log_bk, aes(seq_along(xname), mse_test_bk)) +
+  geom_point() +
+  geom_line() +
+  geom_point(aes(y=mse_train_bk), color="blue") +
+  geom_line(aes(y=mse_train_bk), color="blue") +
+  scale_x_continuous("Variables", labels = log_bk$xname, breaks = seq_along(log_bk$xname)) +
+  scale_y_continuous("MSE test") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(log_bk)
+```
+
+
+## select the significance variables from selections
+```{r}
+var<-c("price","product_weight_g","payment_value","delivered_days",
+       "freight_value","product_width_cm","payment_sequential","payment_installments")
+prediction_dataset %>% 
+  select(var,review_score,train)->pred1
+
+
+
+
+ef_test <- pred1 %>% filter(train == 0)
+ef_train <- pred1 %>% filter(train == 1)
+
+
+
+# data preparation
+f1<-as.formula(paste(names(pred1)[9], paste(names(pred1)[1:8], collapse=" + "), sep=" ~ "))
+x_train <- model.matrix(f1, ef_train)[, -1]
+y_train <- ef_train$review_score
+x_test <- model.matrix(f1, ef_test)[, -1]
+y_test <- ef_test$review_score
+
+
+```
+
+## randromForest
+```{r}
+library(randomForest)
+fit_rf <- randomForest(f1, ef_train, ntree = 500, do.trace=F)
+yhat_rf_train <- predict(fit_rf, ef_train)
+mse_rf_train <- mean((yhat_rf_train - y_train) ^2)
+yhat_rf_test <- predict(fit_rf, ef_test)
+mse_rf_test <- mean((yhat_rf_test - y_test) ^2)
+as.data.frame(importance(fit_rf))->importance
+cbind(importance,rownames(importance))->importance
+rownames(importance)<-seq(1,8,1)
+importance[order(-importance$IncNodePurity),]<-importance
+
+varImpPlot(fit_rf)
+paste("Random Forest Train MSE",mse_rf_train)
+paste("Random Forest Test MSE",mse_rf_test)
+```
+### importance
+```{r}
+importance[order(-importance$IncNodePurity),]
+```
+
+## boosting
+```{r}
+library(gbm)
+library(glmnet)
+fit_btree <- gbm(f1, data = ef_train, distribution = "gaussian",
+                 n.trees = 1000, interaction.depth = 2, shrinkage = 0.1)
+relative.influence(fit_btree)
+yhat_btree_train <- predict(fit_btree, ef_train, n.trees = 100)
+mse_btree_train <- mean((yhat_btree_train - y_train) ^ 2)
+yhat_btree_test <- predict(fit_btree, ef_test, n.trees = 100)
+mse_btree_test <- mean((yhat_btree_test - y_test) ^ 2)
+
+paste("Boosting Trees Train MSE",mse_btree_train)
+paste("Boosting Trees Test MSE",mse_btree_test)
+```
