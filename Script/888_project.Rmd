@@ -373,6 +373,10 @@ paste("Random Forest Test MSE",mse_rf_test)
 ```
 ### importance
 ```{r}
+as.data.frame(importance(fit_rf))->importance
+cbind(importance,rownames(importance))->importance
+rownames(importance)<-seq(1,8,1)
+importance[order(-importance$IncNodePurity),]<-importance
 importance[order(-importance$IncNodePurity),]
 ```
 
