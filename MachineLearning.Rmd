@@ -33,9 +33,10 @@ useful_var<-c("price","deliverd_difftime","delivered_days",
               "payment_value","freight_value","product_category_name",
               "product_name_lenght","product_description_lenght","product_photos_qty",
               "review_score")
+# final_withreview %>% 
+#   select(useful_var,-product_category_name)->prediction_dataset
 final_withreview %>% 
-  select(useful_var,-product_category_name)->prediction_dataset
-
+  select(declared_monthly_revenue,price,freight_value,product_name_lenght:payment_sequential,payment_installments:mean_long,major_state:review_score)->prediction_dataset
 
 
 set.seed(1234)
