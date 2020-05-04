@@ -157,6 +157,21 @@ order_reviews_lda <- LDA(order_reviews_dtm, k = 2, control = list(seed = 729))
 terms(order_reviews_lda, 10) ->topicsPro
 ```
 
+## linear
+```{r}
+# compute MSEs
+fit_lm <- lm(f1, ef_train)
+# MSE Train
+yhat_train_lm <- predict(fit_lm)
+mse_train_lm <- mean((y_train - yhat_train_lm)^2)
+paste("Linear Regression Train MSE", mse_train_lm)
+# MSE Test
+yhat_test_lm <- predict(fit_lm, ef_test) 
+mse_test_lm <- mean((y_test - yhat_test_lm)^2)
+paste("Linear Regression Test MSE", mse_test_lm)
+coef(fit_lm)
+summary(fit_lm)
+```
 ## set formula
 ```{r}
 
