@@ -172,6 +172,7 @@ paste("Linear Regression Test MSE", mse_test_lm)
 coef(fit_lm)
 summary(fit_lm)
 ```
+
 ## set formula
 ```{r}
 
@@ -274,6 +275,7 @@ ggplot(log_fw, aes(seq_along(xname), mse_test)) +
 
 print(log_fw)
 ```
+
 ## backward
 ```{r}
 xnames <- colnames(ef_train)
@@ -343,7 +345,56 @@ ggplot(log_bk, aes(seq_along(xname), mse_test_bk)) +
 print(log_bk)
 ```
 
+## Model #4: Ridge Regression
+```{r,warning=FALSE}
+##lambda
+est_r <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
+#est_r <- glmnet(x_train, y_train, alpha = 0, nlambda = 100)
+y_train_hat_r <- predict(est_r,x_train,s = est_r$lambda.min)
+mse_train_r <- mean((y_train - y_train_hat_r)^2)
+#y_train_hat
 
+y_test_hat_r <- predict(est_r, x_test,s = est_r$lambda.min)
+mse_test_r <- mean((y_test - y_test_hat_r)^2)
+##y_test_hat
+##lm<-function(x,y) {
+  #mean((x-y)^2)
+##}
+# write code to create a vector that contains 100 MSE estimates for the train data
+#use apply() to use the funciton created
+##mse_train_r<-apply(y_train_hat_r,2,lm,y=y_train)
+# write code to create a vector that contains 100 MSE estimates for the test data
+#use apply() to use the funciton created
+##mse_test_r<-apply(y_test_hat_r,2,lm,y=y_test)
+lambda_min_mse_train_r <- mse_train_r[which.min(mse_train_r)]
+lambda_min_mse_test_r <- mse_test_r[which.min(mse_test_r)]
+# create a tibble of train MSEs and lambdas
+##ef_mse_r <- tibble(
+  ##lambda = est_r$lambda,
+  ##mse = mse_train_r,
+  ##dataset = "Train"
+##)
+##ef_mse_r<- rbind(ef_mse_r, tibble(
+  ##lambda = est_r$lambda,
+  ##mse = mse_test_r,
+  ##dataset = "Test"
+##))
+# Use the rbind command to combine dd_mse_train
+# and dd_mse_test into a single data frame
+
+#ef_mse_r %>% 
+  #ggplot(aes(x=lambda,y=mse,color=dataset))+
+  #geom_line()+
+  #reverse x scale
+  #scale_x_reverse()+
+  #geom_point(data =filter(ef_mse_r,dataset=="Train"),aes(x=lambda[which.min(mse)],y=min(mse)))+
+  #geom_point(data =filter(ef_mse_r,dataset=="Test"),aes(x=lambda[which.min(mse)],y=min(mse))) 
+
+paste("Ridge Regression Train MSE",lambda_min_mse_train_r)
+paste("Ridge Regression Test MSE",lambda_min_mse_test_r)
+
+coef(est_r,lambda_min_mse_test_r)
+```
 ## select the significance variables from selections
 ```{r}
 var<-c("price","product_weight_g","payment_value","delivered_days",
@@ -367,6 +418,104 @@ x_test <- model.matrix(f1, ef_test)[, -1]
 y_test <- ef_test$review_score
 
 
+```
+
+##  Ridge Regression
+```{r,warning=FALSE}
+##lambda
+est_r <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
+#est_r <- glmnet(x_train, y_train, alpha = 0, nlambda = 100)
+y_train_hat_r <- predict(est_r,x_train,s = est_r$lambda.min)
+mse_train_r <- mean((y_train - y_train_hat_r)^2)
+#y_train_hat
+
+y_test_hat_r <- predict(est_r, x_test,s = est_r$lambda.min)
+mse_test_r <- mean((y_test - y_test_hat_r)^2)
+##y_test_hat
+##lm<-function(x,y) {
+  #mean((x-y)^2)
+##}
+# write code to create a vector that contains 100 MSE estimates for the train data
+#use apply() to use the funciton created
+##mse_train_r<-apply(y_train_hat_r,2,lm,y=y_train)
+# write code to create a vector that contains 100 MSE estimates for the test data
+#use apply() to use the funciton created
+##mse_test_r<-apply(y_test_hat_r,2,lm,y=y_test)
+lambda_min_mse_train_r <- mse_train_r[which.min(mse_train_r)]
+lambda_min_mse_test_r <- mse_test_r[which.min(mse_test_r)]
+# create a tibble of train MSEs and lambdas
+##ef_mse_r <- tibble(
+  ##lambda = est_r$lambda,
+  ##mse = mse_train_r,
+  ##dataset = "Train"
+##)
+##ef_mse_r<- rbind(ef_mse_r, tibble(
+  ##lambda = est_r$lambda,
+  ##mse = mse_test_r,
+  ##dataset = "Test"
+##))
+# Use the rbind command to combine dd_mse_train
+# and dd_mse_test into a single data frame
+
+#ef_mse_r %>% 
+  #ggplot(aes(x=lambda,y=mse,color=dataset))+
+  #geom_line()+
+  #reverse x scale
+  #scale_x_reverse()+
+  #geom_point(data =filter(ef_mse_r,dataset=="Train"),aes(x=lambda[which.min(mse)],y=min(mse)))+
+  #geom_point(data =filter(ef_mse_r,dataset=="Test"),aes(x=lambda[which.min(mse)],y=min(mse))) 
+
+paste("Ridge Regression Train MSE",lambda_min_mse_train_r)
+paste("Ridge Regression Test MSE",lambda_min_mse_test_r)
+
+coef(est_r,lambda_min_mse_test_r)
+```
+
+## Lasso Regression
+```{r,warning=FALSE}
+##lambda
+library(glmnet)
+est_l <- glmnet(x_train, y_train, alpha = 1, nlambda = 100)
+y_train_hat_l <- predict(est_l,x_train)
+#y_train_hat
+y_test_hat_l <- predict(est_l, x_test)
+#y_test_hat
+lm<-function(x,y) {
+  mean((x-y)^2)
+}
+# write code to create a vector that contains 100 MSE estimates for the train data
+#use apply() to use the funciton created
+mse_train_l<-apply(y_train_hat_l,2,lm,y=y_train)
+# write code to create a vector that contains 100 MSE estimates for the test data
+#use apply() to use the funciton created
+mse_test_l<-apply(y_test_hat_l,2,lm,y=y_test)
+lambda_min_mse_train_l <- mse_train_l[which.min(mse_train_l)]
+lambda_min_mse_test_l <- mse_test_l[which.min(mse_test_l)]
+# create a tibble of train MSEs and lambdas
+ef_mse_l <- tibble(
+  lambda = est_l$lambda,
+  mse = mse_train_l,
+  dataset = "Train"
+)
+ef_mse_l<- rbind(ef_mse_l, tibble(
+  lambda = est_l$lambda,
+  mse = mse_test_l,
+  dataset = "Test"
+))
+# Use the rbind command to combine dd_mse_train
+# and dd_mse_test into a single data frame
+
+ef_mse_l %>% 
+  ggplot(aes(x=lambda,y=mse,color=dataset))+
+  geom_line()+
+  #reverse x scale
+  scale_x_reverse()+
+  geom_point(data =filter(ef_mse_l,dataset=="Train"),aes(x=lambda[which.min(mse)],y=min(mse)))+
+  geom_point(data =filter(ef_mse_l,dataset=="Test"),aes(x=lambda[which.min(mse)],y=min(mse))) 
+paste("Lasso Regression Train MSE",lambda_min_mse_train_l)
+paste("Lasso Regression Test MSE",lambda_min_mse_test_l)
+
+coef(est_l,lambda_min_mse_test_l)
 ```
 
 ## randromForest
